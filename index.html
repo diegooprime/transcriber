@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transcriber</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<h1>TRANSCRIBER</h1>
+<p class="subtitle">Drop audio files. Get speaker-tagged transcripts.</p>
+
+<div class="controls">
+  <label>Title
+    <input type="text" id="docTitle" placeholder="Auto from filename">
+  </label>
+  <label>Language
+    <select id="lang">
+      <option value="es" selected>Spanish</option>
+      <option value="en">English</option>
+      <option value="pt">Portuguese</option>
+      <option value="fr">French</option>
+      <option value="de">German</option>
+      <option value="it">Italian</option>
+      <option value="ja">Japanese</option>
+      <option value="zh">Chinese</option>
+      <option value="ko">Korean</option>
+    </select>
+  </label>
+  <label>Speakers
+    <input type="number" id="speakers" min="1" max="20" placeholder="auto">
+  </label>
+</div>
+
+<div class="dropzone" id="dropzone">
+  <div class="dropzone-icon">🎙️</div>
+  <div class="dropzone-text">Drop audio files here or click to upload</div>
+  <div class="dropzone-formats">opus · mp3 · wav · m4a · webm · ogg · flac · mp4 — multiple files will be stitched together</div>
+  <input type="file" id="fileInput" accept="audio/*,video/mp4,.opus,.webm,.ogg,.flac" multiple>
+</div>
+
+<div class="file-queue" id="fileQueue"></div>
+
+<div class="queue-actions" id="queueActions">
+  <button class="btn btn-primary" id="transcribeBtn">Transcribe</button>
+  <button class="btn" id="clearBtn">Clear</button>
+</div>
+
+<div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+<div class="status" id="status"></div>
+
+<div class="speaker-map" id="speakerMap">
+  <h3>Rename speakers (optional)</h3>
+  <div id="speakerRows"></div>
+  <button class="btn" id="applySpeakers">Apply names & download</button>
+</div>
+
+<div class="result" id="result">
+  <div class="result-header">
+    <h2 id="resultTitle">Transcript</h2>
+    <div class="result-actions">
+      <button class="btn" id="copyBtn">Copy</button>
+      <button class="btn" id="downloadBtn">Download .md</button>
+    </div>
+  </div>
+  <div class="transcript" id="transcript"></div>
+</div>
+
+<script type="module" src="./app.ts"></script>
+</body>
+</html>
