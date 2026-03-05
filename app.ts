@@ -279,7 +279,7 @@ function downloadTranscript() {
   const a = document.createElement("a");
   a.href = url;
   const title = getDocTitle().replace(/[^a-zA-Z0-9_\-\s]/g, "").replace(/\s+/g, "_");
-  a.download = title + "_transcript.md";
+  a.download = title + ".md";
   a.click();
   URL.revokeObjectURL(url);
 }
