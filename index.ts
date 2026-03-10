@@ -1,26 +1,77 @@
 import index from "./index.html";
 import { tmpdir } from "os";
 import { join } from "path";
-import { unlinkSync, writeFileSync, existsSync } from "fs";
+import { unlinkSync, writeFileSync } from "fs";
 
 const AAI_KEY = process.env.ASSEMBLYAI_API_KEY!;
 const PORT = Number(process.env.PORT) || 3456;
 
-async function concatenateAudio(files: File[]): Promise<Buffer> {
-  if (files.length === 1) {
-    return Buffer.from(await files[0].arrayBuffer());
+const VIDEO_EXTS = new Set(["mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "m4v", "3gp"]);
+
+function isVideoFile(name: string): boolean {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  return VIDEO_EXTS.has(ext);
+}
+
+async function extractAudio(file: File): Promise<{ buffer: Buffer; tmpPath?: string }> {
+  if (!isVideoFile(file.name)) {
+    return { buffer: Buffer.from(await file.arrayBuffer()) };
   }
 
-  // Write all files to tmp
+  const tmpDir = tmpdir();
+  const videoPath = join(tmpDir, `transcriber_vid_${Date.now()}_${Math.random().toString(36).slice(2)}.${file.name.split(".").pop()}`);
+  const audioPath = videoPath.replace(/\.[^.]+$/, ".mp3");
+
+  writeFileSync(videoPath, Buffer.from(await file.arrayBuffer()));
+
+  try {
+    const proc = Bun.spawn(
+      ["ffmpeg", "-y", "-i", videoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", audioPath],
+      { stdout: "pipe", stderr: "pipe" }
+    );
+
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`ffmpeg audio extraction failed (exit ${exitCode}): ${stderr.slice(-200)}`);
+    }
+
+    const audioBuffer = Buffer.from(await Bun.file(audioPath).arrayBuffer());
+    return { buffer: audioBuffer, tmpPath: audioPath };
+  } finally {
+    try { unlinkSync(videoPath); } catch {}
+  }
+}
+
+async function concatenateAudio(files: File[]): Promise<Buffer> {
+  // Extract audio from any video files first
+  const extracted: { buffer: Buffer; tmpPath?: string }[] = [];
+  try {
+    for (const f of files) {
+      extracted.push(await extractAudio(f));
+    }
+
+    // If single file, return directly
+    if (extracted.length === 1) {
+      return extracted[0].buffer;
+    }
+  } catch (err) {
+    // Cleanup extracted tmp files on error
+    for (const e of extracted) {
+      if (e.tmpPath) try { unlinkSync(e.tmpPath); } catch {}
+    }
+    throw err;
+  }
+
+  // Write extracted audio buffers to tmp for concat
   const tmpDir = tmpdir();
   const tmpFiles: string[] = [];
   const listFile = join(tmpDir, `transcriber_concat_${Date.now()}.txt`);
 
   try {
-    for (let i = 0; i < files.length; i++) {
-      const ext = files[i].name.split(".").pop() || "m4a";
-      const tmpPath = join(tmpDir, `transcriber_${Date.now()}_${i}.${ext}`);
-      writeFileSync(tmpPath, Buffer.from(await files[i].arrayBuffer()));
+    for (let i = 0; i < extracted.length; i++) {
+      const tmpPath = join(tmpDir, `transcriber_${Date.now()}_${i}.mp3`);
+      writeFileSync(tmpPath, extracted[i].buffer);
       tmpFiles.push(tmpPath);
     }
 
@@ -47,16 +98,20 @@ async function concatenateAudio(files: File[]): Promise<Buffer> {
     unlinkSync(outPath);
     return Buffer.from(merged);
   } finally {
-    // Cleanup tmp files
     for (const f of tmpFiles) {
       try { unlinkSync(f); } catch {}
     }
     try { unlinkSync(listFile); } catch {}
+    // Cleanup any video extraction tmp files
+    for (const e of extracted) {
+      if (e.tmpPath) try { unlinkSync(e.tmpPath); } catch {}
+    }
   }
 }
 
 Bun.serve({
   port: PORT,
+  maxRequestBodySize: 2 * 1024 * 1024 * 1024, // 2 GB
   routes: {
     "/": index,
     "/api/transcribe": {
@@ -67,11 +122,11 @@ Bun.serve({
         const speakersExpected = formData.get("speakers_expected") as string | null;
 
         if (!files.length) {
-          return Response.json({ error: "No audio files provided" }, { status: 400 });
+          return Response.json({ error: "No files provided" }, { status: 400 });
         }
 
         try {
-          // Step 1: Concatenate if multiple files
+          // Step 1: Extract audio from videos (if any) + concatenate if multiple
           const audioBuffer = await concatenateAudio(files);
 
           // Step 2: Upload to AssemblyAI

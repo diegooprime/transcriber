@@ -9,7 +9,7 @@
 <body>
 
 <h1>TRANSCRIBER</h1>
-<p class="subtitle">Drop audio files. Get speaker-tagged transcripts.</p>
+<p class="subtitle">Drop audio or video files. Get speaker-tagged transcripts.</p>
 
 <div class="controls">
   <label>Title
@@ -35,9 +35,9 @@
 
 <div class="dropzone" id="dropzone">
   <div class="dropzone-icon">🎙️</div>
-  <div class="dropzone-text">Drop audio files here or click to upload</div>
-  <div class="dropzone-formats">opus · mp3 · wav · m4a · webm · ogg · flac · mp4 — multiple files will be stitched together</div>
-  <input type="file" id="fileInput" accept="audio/*,video/mp4,.opus,.webm,.ogg,.flac" multiple>
+  <div class="dropzone-text">Drop audio or video files here or click to upload</div>
+  <div class="dropzone-formats">audio: opus · mp3 · wav · m4a · ogg · flac — video: mp4 · mkv · mov · avi · webm — multiple files stitched together</div>
+  <input type="file" id="fileInput" accept="audio/*,video/*,.opus,.mkv,.flac" multiple>
 </div>
 
 <div class="file-queue" id="fileQueue"></div>
@@ -53,7 +53,7 @@
 <div class="speaker-map" id="speakerMap">
   <h3>Rename speakers (optional)</h3>
   <div id="speakerRows"></div>
-  <button class="btn" id="applySpeakers">Apply names & download</button>
+  <button class="btn" id="applySpeakers">Apply names & copy</button>
 </div>
 
 <div class="result" id="result">

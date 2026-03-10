@@ -197,6 +197,7 @@ document.getElementById("applySpeakers")!.addEventListener("click", () => {
     if (name) speakerNames[orig] = name;
   }
   if (currentData) renderTranscript(currentData);
+  navigator.clipboard.writeText(buildMarkdown()).then(() => setStatus("Names applied & copied to clipboard!"));
 });
 
 // --- Copy & Download ---
@@ -253,15 +254,7 @@ function showSpeakerMap(data: TranscriptData) {
 function buildMarkdown(): string {
   if (!currentData) return "";
   const d = currentData;
-  const title = getDocTitle();
-  const mins = Math.floor(d.duration / 60);
-  const secs = Math.floor(d.duration % 60);
-  const speakers = [...new Set(d.utterances.map((u) => speakerNames[u.speaker] || u.speaker))];
-  let md = `# Transcripci\u00f3n \u2014 ${title}\n`;
-  md += `**Duraci\u00f3n:** ${mins} minutos ${secs} segundos\n`;
-  md += `**Modelo:** AssemblyAI universal-3-pro\n`;
-  md += `**Participantes:** ${speakers.join(", ")}\n`;
-  md += `**Fecha:** ${new Date().toISOString().split("T")[0]}\n\n---\n\n`;
+  let md = "";
   for (const u of d.utterances) {
     const m = Math.floor(u.start / 60000);
     const s = Math.floor((u.start % 60000) / 1000);
@@ -269,7 +262,7 @@ function buildMarkdown(): string {
     const name = speakerNames[u.speaker] || u.speaker;
     md += `**[${ts}] ${name}:** ${u.text}\n\n`;
   }
-  return md;
+  return md.trimEnd();
 }
 
 function downloadTranscript() {
