@@ -109,104 +109,111 @@ async function concatenateAudio(files: File[]): Promise<Buffer> {
   }
 }
 
+async function handleTranscribe(req: Request): Promise<Response> {
+  const formData = await req.formData();
+  const files = formData.getAll("audio") as File[];
+  const language = (formData.get("language") as string) || "es";
+  const speakersExpected = formData.get("speakers_expected") as string | null;
+
+  if (!files.length) {
+    return Response.json({ error: "No files provided" }, { status: 400 });
+  }
+
+  try {
+    // Step 1: Extract audio from videos (if any) + concatenate if multiple
+    const audioBuffer = await concatenateAudio(files);
+
+    // Step 2: Upload to AssemblyAI
+    const uploadRes = await fetch("https://api.assemblyai.com/v2/upload", {
+      method: "POST",
+      headers: { Authorization: AAI_KEY },
+      body: audioBuffer,
+    });
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text();
+      return Response.json({ error: `Upload failed: ${err}` }, { status: 500 });
+    }
+
+    const { upload_url } = (await uploadRes.json()) as { upload_url: string };
+
+    // Step 3: Create transcription with speaker labels
+    const transcriptBody: Record<string, unknown> = {
+      audio_url: upload_url,
+      speaker_labels: true,
+      language_code: language,
+      speech_models: ["universal-3-pro"],
+    };
+
+    if (speakersExpected) {
+      transcriptBody.speakers_expected = Number(speakersExpected);
+    }
+
+    const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
+      method: "POST",
+      headers: {
+        Authorization: AAI_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(transcriptBody),
+    });
+
+    if (!createRes.ok) {
+      const err = await createRes.text();
+      return Response.json({ error: `Transcription failed: ${err}` }, { status: 500 });
+    }
+
+    const { id } = (await createRes.json()) as { id: string };
+
+    // Step 4: Poll until complete (max 10 min)
+    for (let i = 0; i < 120; i++) {
+      await Bun.sleep(3000);
+
+      const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
+        headers: { Authorization: AAI_KEY },
+      });
+
+      const data = (await pollRes.json()) as {
+        status: string;
+        error?: string;
+        utterances?: Array<{ speaker: string; text: string; start: number; end: number }>;
+        audio_duration?: number;
+        text?: string;
+      };
+
+      if (data.status === "completed") {
+        return Response.json({
+          status: "completed",
+          utterances: data.utterances || [],
+          duration: data.audio_duration || 0,
+          text: data.text || "",
+        });
+      }
+
+      if (data.status === "error") {
+        return Response.json({ error: `Transcription error: ${data.error}` }, { status: 500 });
+      }
+    }
+
+    return Response.json({ error: "Transcription timed out" }, { status: 504 });
+  } catch (err: any) {
+    return Response.json({ error: err.message || "Unknown error" }, { status: 500 });
+  }
+}
+
 Bun.serve({
   port: PORT,
+  hostname: "127.0.0.1",
   maxRequestBodySize: 2 * 1024 * 1024 * 1024, // 2 GB
   routes: {
     "/": index,
-    "/api/transcribe": {
-      POST: async (req) => {
-        const formData = await req.formData();
-        const files = formData.getAll("audio") as File[];
-        const language = (formData.get("language") as string) || "es";
-        const speakersExpected = formData.get("speakers_expected") as string | null;
-
-        if (!files.length) {
-          return Response.json({ error: "No files provided" }, { status: 400 });
-        }
-
-        try {
-          // Step 1: Extract audio from videos (if any) + concatenate if multiple
-          const audioBuffer = await concatenateAudio(files);
-
-          // Step 2: Upload to AssemblyAI
-          const uploadRes = await fetch("https://api.assemblyai.com/v2/upload", {
-            method: "POST",
-            headers: { Authorization: AAI_KEY },
-            body: audioBuffer,
-          });
-
-          if (!uploadRes.ok) {
-            const err = await uploadRes.text();
-            return Response.json({ error: `Upload failed: ${err}` }, { status: 500 });
-          }
-
-          const { upload_url } = (await uploadRes.json()) as { upload_url: string };
-
-          // Step 3: Create transcription with speaker labels
-          const transcriptBody: Record<string, unknown> = {
-            audio_url: upload_url,
-            speaker_labels: true,
-            language_code: language,
-            speech_models: ["universal-3-pro"],
-          };
-
-          if (speakersExpected) {
-            transcriptBody.speakers_expected = Number(speakersExpected);
-          }
-
-          const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
-            method: "POST",
-            headers: {
-              Authorization: AAI_KEY,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(transcriptBody),
-          });
-
-          if (!createRes.ok) {
-            const err = await createRes.text();
-            return Response.json({ error: `Transcription failed: ${err}` }, { status: 500 });
-          }
-
-          const { id } = (await createRes.json()) as { id: string };
-
-          // Step 4: Poll until complete (max 10 min)
-          for (let i = 0; i < 120; i++) {
-            await Bun.sleep(3000);
-
-            const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
-              headers: { Authorization: AAI_KEY },
-            });
-
-            const data = (await pollRes.json()) as {
-              status: string;
-              error?: string;
-              utterances?: Array<{ speaker: string; text: string; start: number; end: number }>;
-              audio_duration?: number;
-              text?: string;
-            };
-
-            if (data.status === "completed") {
-              return Response.json({
-                status: "completed",
-                utterances: data.utterances || [],
-                duration: data.audio_duration || 0,
-                text: data.text || "",
-              });
-            }
-
-            if (data.status === "error") {
-              return Response.json({ error: `Transcription error: ${data.error}` }, { status: 500 });
-            }
-          }
-
-          return Response.json({ error: "Transcription timed out" }, { status: 504 });
-        } catch (err: any) {
-          return Response.json({ error: err.message || "Unknown error" }, { status: 500 });
-        }
-      },
-    },
+  },
+  fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === "/api/transcribe" && req.method === "POST") {
+      return handleTranscribe(req);
+    }
+    return new Response("Not found", { status: 404 });
   },
   development: {
     hmr: true,
