@@ -36,7 +36,13 @@ async function extractAudio(file: File): Promise<{ buffer: Buffer; tmpPath?: str
       throw new Error(`ffmpeg audio extraction failed (exit ${exitCode}): ${stderr.slice(-200)}`);
     }
 
-    const audioBuffer = Buffer.from(await Bun.file(audioPath).arrayBuffer());
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = Buffer.from(await Bun.file(audioPath).arrayBuffer());
+    } catch (err) {
+      try { unlinkSync(audioPath); } catch {}
+      throw err;
+    }
     return { buffer: audioBuffer, tmpPath: audioPath };
   } finally {
     try { unlinkSync(videoPath); } catch {}
@@ -51,9 +57,11 @@ async function concatenateAudio(files: File[]): Promise<Buffer> {
       extracted.push(await extractAudio(f));
     }
 
-    // If single file, return directly
+    // If single file, return directly (clean up tmp if it was a video extraction)
     if (extracted.length === 1) {
-      return extracted[0].buffer;
+      const single = extracted[0]!;
+      if (single.tmpPath) try { unlinkSync(single.tmpPath); } catch {}
+      return single.buffer;
     }
   } catch (err) {
     // Cleanup extracted tmp files on error
@@ -119,6 +127,10 @@ async function handleTranscribe(req: Request): Promise<Response> {
     return Response.json({ error: "No files provided" }, { status: 400 });
   }
 
+  if (files.length > 20) {
+    return Response.json({ error: "Too many files (max 20)" }, { status: 400 });
+  }
+
   try {
     // Step 1: Extract audio from videos (if any) + concatenate if multiple
     const audioBuffer = await concatenateAudio(files);
@@ -131,8 +143,8 @@ async function handleTranscribe(req: Request): Promise<Response> {
     });
 
     if (!uploadRes.ok) {
-      const err = await uploadRes.text();
-      return Response.json({ error: `Upload failed: ${err}` }, { status: 500 });
+      console.error(`Upload failed: ${await uploadRes.text()}`);
+      return Response.json({ error: "Audio upload failed" }, { status: 500 });
     }
 
     const { upload_url } = (await uploadRes.json()) as { upload_url: string };
@@ -146,7 +158,10 @@ async function handleTranscribe(req: Request): Promise<Response> {
     };
 
     if (speakersExpected) {
-      transcriptBody.speakers_expected = Number(speakersExpected);
+      const n = Number(speakersExpected);
+      if (Number.isFinite(n) && n >= 1 && n <= 20) {
+        transcriptBody.speakers_expected = n;
+      }
     }
 
     const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
@@ -159,8 +174,8 @@ async function handleTranscribe(req: Request): Promise<Response> {
     });
 
     if (!createRes.ok) {
-      const err = await createRes.text();
-      return Response.json({ error: `Transcription failed: ${err}` }, { status: 500 });
+      console.error(`Transcription create failed: ${await createRes.text()}`);
+      return Response.json({ error: "Transcription request failed" }, { status: 500 });
     }
 
     const { id } = (await createRes.json()) as { id: string };
@@ -191,13 +206,15 @@ async function handleTranscribe(req: Request): Promise<Response> {
       }
 
       if (data.status === "error") {
-        return Response.json({ error: `Transcription error: ${data.error}` }, { status: 500 });
+        console.error(`Transcription error: ${data.error}`);
+        return Response.json({ error: "Transcription failed" }, { status: 500 });
       }
     }
 
     return Response.json({ error: "Transcription timed out" }, { status: 504 });
   } catch (err: any) {
-    return Response.json({ error: err.message || "Unknown error" }, { status: 500 });
+    console.error("Transcription error:", err);
+    return Response.json({ error: "Internal transcription error" }, { status: 500 });
   }
 }
 

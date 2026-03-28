@@ -30,6 +30,15 @@ let currentFilename = "";
 let speakerNames: Record<string, string> = {};
 let queuedFiles: File[] = [];
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function getDocTitle(): string {
   return docTitleInput.value.trim() || currentFilename;
 }
@@ -56,7 +65,7 @@ function renderQueue() {
     div.className = "file-item";
     div.innerHTML = `
       <span class="file-num">${i + 1}</span>
-      <span class="file-name">${f.name}</span>
+      <span class="file-name">${escapeHtml(f.name)}</span>
       <span class="file-size">${size} MB</span>
       <span class="file-remove" data-idx="${i}">&times;</span>
     `;
@@ -212,7 +221,7 @@ document.getElementById("downloadBtn")!.addEventListener("click", downloadTransc
 
 function setStatus(msg: string) {
   const isProcessing = msg.includes("...") || msg.includes("Uploading");
-  statusEl.innerHTML = isProcessing ? '<span class="spinner"></span>' + msg : msg;
+  statusEl.innerHTML = isProcessing ? '<span class="spinner"></span>' + escapeHtml(msg) : escapeHtml(msg);
 }
 
 function renderTranscript(data: TranscriptData) {
@@ -225,8 +234,8 @@ function renderTranscript(data: TranscriptData) {
     const div = document.createElement("div");
     div.className = "utterance";
     div.innerHTML = `
-      <div class="meta"><span class="timestamp">[${ts}]</span> <span class="speaker">${name}</span></div>
-      <div class="text">${u.text}</div>
+      <div class="meta"><span class="timestamp">[${ts}]</span> <span class="speaker">${escapeHtml(name)}</span></div>
+      <div class="text">${escapeHtml(u.text)}</div>
     `;
     transcriptEl.appendChild(div);
   }
@@ -245,7 +254,7 @@ function showSpeakerMap(data: TranscriptData) {
   for (const s of speakers) {
     const row = document.createElement("div");
     row.className = "speaker-row";
-    row.innerHTML = `<label>${s} \u2192</label><input type="text" data-speaker="${s}" placeholder="${s}">`;
+    row.innerHTML = `<label>${escapeHtml(s)} \u2192</label><input type="text" data-speaker="${escapeHtml(s)}" placeholder="${escapeHtml(s)}">`;
     speakerRowsEl.appendChild(row);
   }
   speakerMapEl.classList.add("visible");
