@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.transcriber.watcher</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/p/.bun/bin/bun</string>
+		<string>run</string>
+		<string>/Users/p/Desktop/code/bg_tools/transcriber/watcher.ts</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/p/Desktop/code/bg_tools/transcriber</string>
+	<key>KeepAlive</key>
+	<true/>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/tmp/transcriber-watcher.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/transcriber-watcher.err</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/Users/p/.bun/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<key>WATCH_FOLDER</key>
+		<string>/Users/p/Desktop/Transcriber</string>
+		<key>OUTPUT_FOLDER</key>
+		<string>/Users/p/Desktop</string>
+		<key>TRANSCRIBE_LANG</key>
+		<string>auto</string>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+</dict>
+</plist>
