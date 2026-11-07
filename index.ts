@@ -2,6 +2,7 @@ import index from "./index.html";
 import { tmpdir } from "os";
 import { join } from "path";
 import { unlinkSync, writeFileSync } from "fs";
+import { KEYTERM_MODELS, keyterms } from "./keyterms";
 
 const AAI_KEY = process.env.ASSEMBLYAI_API_KEY!;
 const PORT = Number(process.env.PORT) || 3456;
@@ -150,12 +151,15 @@ async function handleTranscribe(req: Request): Promise<Response> {
     const { upload_url } = (await uploadRes.json()) as { upload_url: string };
 
     // Step 3: Create transcription with speaker labels
+    const model = "universal-3-pro";
     const transcriptBody: Record<string, unknown> = {
       audio_url: upload_url,
       speaker_labels: true,
       language_code: language,
-      speech_models: ["universal-3-pro"],
+      speech_models: [model],
     };
+    const terms = KEYTERM_MODELS.has(model) ? keyterms() : [];
+    if (terms.length) transcriptBody.keyterms_prompt = terms; // his people, places and tools, spelled his way
 
     if (speakersExpected) {
       const n = Number(speakersExpected);
