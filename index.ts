@@ -50,7 +50,7 @@ async function extractAudio(file: File): Promise<{ buffer: Buffer; tmpPath?: str
   }
 }
 
-async function concatenateAudio(files: File[]): Promise<Buffer> {
+export async function concatenateAudio(files: File[]): Promise<Buffer> {
   // Extract audio from any video files first
   const extracted: { buffer: Buffer; tmpPath?: string }[] = [];
   try {
@@ -75,7 +75,6 @@ async function concatenateAudio(files: File[]): Promise<Buffer> {
   // Write extracted audio buffers to tmp for concat
   const tmpDir = tmpdir();
   const tmpFiles: string[] = [];
-  const listFile = join(tmpDir, `transcriber_concat_${Date.now()}.txt`);
 
   try {
     for (let i = 0; i < extracted.length; i++) {
@@ -84,14 +83,14 @@ async function concatenateAudio(files: File[]): Promise<Buffer> {
       tmpFiles.push(tmpPath);
     }
 
-    // Write ffmpeg concat list
-    const listContent = tmpFiles.map((f) => `file '${f}'`).join("\n");
-    writeFileSync(listFile, listContent);
-
-    // Concatenate with ffmpeg
+    // Concatenate with ffmpeg's concat filter, which decodes each input on its own. The concat
+    // demuxer assumes every file shares the first one's codec and, with exit code 0, drops the
+    // audio of any that doesn't (an .opus after an .mp3, a .wav at another sample rate).
+    const inputs = tmpFiles.flatMap((f) => ["-i", f]);
+    const filter = tmpFiles.map((_, i) => `[${i}:a:0]`).join("") + `concat=n=${tmpFiles.length}:v=0:a=1[a]`;
     const outPath = join(tmpDir, `transcriber_merged_${Date.now()}.mp3`);
     const proc = Bun.spawn(
-      ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c:a", "libmp3lame", "-q:a", "2", outPath],
+      ["ffmpeg", "-y", ...inputs, "-filter_complex", filter, "-map", "[a]", "-c:a", "libmp3lame", "-q:a", "2", outPath],
       { stdout: "pipe", stderr: "pipe" }
     );
 
@@ -110,7 +109,6 @@ async function concatenateAudio(files: File[]): Promise<Buffer> {
     for (const f of tmpFiles) {
       try { unlinkSync(f); } catch {}
     }
-    try { unlinkSync(listFile); } catch {}
     // Cleanup any video extraction tmp files
     for (const e of extracted) {
       if (e.tmpPath) try { unlinkSync(e.tmpPath); } catch {}
@@ -222,23 +220,26 @@ async function handleTranscribe(req: Request): Promise<Response> {
   }
 }
 
-Bun.serve({
-  port: PORT,
-  hostname: "127.0.0.1",
-  maxRequestBodySize: 2 * 1024 * 1024 * 1024, // 2 GB
-  routes: {
-    "/": index,
-  },
-  fetch(req) {
-    const url = new URL(req.url);
-    if (url.pathname === "/api/transcribe" && req.method === "POST") {
-      return handleTranscribe(req);
-    }
-    return new Response("Not found", { status: 404 });
-  },
-  // Production by default (the service is reached through Tailscale Serve, which the dev
-  // server's Host check blocks). `bun --hot index.ts` or DEV=1 for local HMR.
-  development: process.env.DEV === "1" ? { hmr: true, console: true } : false,
-});
+// Only serve when run directly, so tests can import this file.
+if (import.meta.main) {
+  Bun.serve({
+    port: PORT,
+    hostname: "127.0.0.1",
+    maxRequestBodySize: 2 * 1024 * 1024 * 1024, // 2 GB
+    routes: {
+      "/": index,
+    },
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/api/transcribe" && req.method === "POST") {
+        return handleTranscribe(req);
+      }
+      return new Response("Not found", { status: 404 });
+    },
+    // Production by default (the service is reached through Tailscale Serve, which the dev
+    // server's Host check blocks). `bun --hot index.ts` or DEV=1 for local HMR.
+    development: process.env.DEV === "1" ? { hmr: true, console: true } : false,
+  });
 
-console.log(`\n  🎙️  Transcriber running at http://localhost:${PORT}\n`);
+  console.log(`\n  🎙️  Transcriber running at http://localhost:${PORT}\n`);
+}
