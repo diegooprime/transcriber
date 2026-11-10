@@ -159,12 +159,13 @@ async function transcribe() {
   formData.append("language", lang);
   if (speakers) formData.append("speakers_expected", speakers);
 
+  let interval: ReturnType<typeof setInterval> | undefined;
   try {
     setStatus(`Uploading & transcribing... (${queuedFiles.length > 1 ? "stitching + " : ""}30-90 seconds)`);
     progressFill.style.width = "30%";
 
     let progress = 30;
-    const interval = setInterval(() => {
+    interval = setInterval(() => {
       progress = Math.min(progress + 0.5, 90);
       progressFill.style.width = progress + "%";
     }, 1000);
@@ -188,6 +189,7 @@ async function transcribe() {
     renderTranscript(data);
     showSpeakerMap(data);
   } catch (err: any) {
+    clearInterval(interval); // a request that throws never reaches the clear above
     setStatus("Error: " + err.message);
     progressFill.style.width = "0%";
   } finally {
