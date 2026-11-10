@@ -43,6 +43,7 @@ async function extractAudio(file: File): Promise<{ buffer: Buffer<ArrayBuffer>; 
     const exitCode = await proc.exited;
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text();
+      try { unlinkSync(audioPath); } catch {} // whatever ffmpeg wrote before failing
       throw new Error(`ffmpeg audio extraction failed (exit ${exitCode}): ${stderr.slice(-200)}`);
     }
 
@@ -84,6 +85,7 @@ export async function concatenateAudio(files: File[]): Promise<Buffer<ArrayBuffe
   // Write extracted audio buffers to tmp for concat
   const tmpDir = tmpdir();
   const tmpFiles: string[] = [];
+  const outPath = join(tmpDir, `transcriber_merged_${Date.now()}.mp3`);
 
   try {
     for (let i = 0; i < extracted.length; i++) {
@@ -97,7 +99,6 @@ export async function concatenateAudio(files: File[]): Promise<Buffer<ArrayBuffe
     // audio of any that doesn't (an .opus after an .mp3, a .wav at another sample rate).
     const inputs = tmpFiles.flatMap((f) => ["-i", f]);
     const filter = tmpFiles.map((_, i) => `[${i}:a:0]`).join("") + `concat=n=${tmpFiles.length}:v=0:a=1[a]`;
-    const outPath = join(tmpDir, `transcriber_merged_${Date.now()}.mp3`);
     const proc = Bun.spawn(
       ["ffmpeg", "-y", ...inputs, "-filter_complex", filter, "-map", "[a]", "-c:a", "libmp3lame", "-q:a", "2", outPath],
       { stdout: "pipe", stderr: "pipe" }
@@ -109,12 +110,9 @@ export async function concatenateAudio(files: File[]): Promise<Buffer<ArrayBuffe
       throw new Error(`ffmpeg concat failed (exit ${exitCode}): ${stderr.slice(-200)}`);
     }
 
-    const merged = await Bun.file(outPath).arrayBuffer();
-
-    // Cleanup
-    unlinkSync(outPath);
-    return Buffer.from(merged);
+    return Buffer.from(await Bun.file(outPath).arrayBuffer());
   } finally {
+    try { unlinkSync(outPath); } catch {} // also on failure, when ffmpeg leaves a partial file
     for (const f of tmpFiles) {
       try { unlinkSync(f); } catch {}
     }
