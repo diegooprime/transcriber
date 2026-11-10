@@ -242,7 +242,7 @@ if (import.meta.main) {
       return new Response("Not found", { status: 404 });
     },
     // Production by default (the service is reached through Tailscale Serve, which the dev
-    // server's Host check blocks). `bun --hot index.ts` or DEV=1 for local HMR.
+    // server's Host check blocks). DEV=1 for local HMR; `bun --hot` alone only reloads the server.
     development: process.env.DEV === "1" ? { hmr: true, console: true } : false,
   });
 
