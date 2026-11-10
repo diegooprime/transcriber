@@ -156,7 +156,7 @@ export async function handleTranscribe(req: Request): Promise<Response> {
     const { upload_url } = (await uploadRes.json()) as { upload_url: string };
 
     // Step 3: Create transcription with speaker labels
-    const model = "universal-3-pro";
+    const model = "universal-3-5-pro";
     const transcriptBody: Record<string, unknown> = {
       audio_url: upload_url,
       speaker_labels: true,
