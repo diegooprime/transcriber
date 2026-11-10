@@ -59,7 +59,7 @@ function renderQueue() {
   const totalSize = queuedFiles.reduce((sum, f) => sum + f.size, 0);
 
   for (let i = 0; i < queuedFiles.length; i++) {
-    const f = queuedFiles[i];
+    const f = queuedFiles[i]!;
     const size = (f.size / (1024 * 1024)).toFixed(1);
     const div = document.createElement("div");
     div.className = "file-item";
@@ -91,7 +91,7 @@ function addFiles(files: FileList | File[]) {
     queuedFiles.push(f);
   }
   if (!docTitleInput.value && queuedFiles.length > 0) {
-    currentFilename = queuedFiles[0].name.replace(/\.[^.]+$/, "");
+    currentFilename = queuedFiles[0]!.name.replace(/\.[^.]+$/, "");
   }
   renderQueue();
 }
@@ -139,7 +139,7 @@ async function transcribe() {
   const speakers = (document.getElementById("speakers") as HTMLInputElement).value;
 
   if (!currentFilename && queuedFiles.length > 0) {
-    currentFilename = queuedFiles[0].name.replace(/\.[^.]+$/, "");
+    currentFilename = queuedFiles[0]!.name.replace(/\.[^.]+$/, "");
   }
 
   dropzone.classList.add("processing");

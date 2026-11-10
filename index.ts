@@ -14,7 +14,7 @@ function isVideoFile(name: string): boolean {
   return VIDEO_EXTS.has(ext);
 }
 
-async function extractAudio(file: File): Promise<{ buffer: Buffer; tmpPath?: string }> {
+async function extractAudio(file: File): Promise<{ buffer: Buffer<ArrayBuffer>; tmpPath?: string }> {
   if (!isVideoFile(file.name)) {
     return { buffer: Buffer.from(await file.arrayBuffer()) };
   }
@@ -37,7 +37,7 @@ async function extractAudio(file: File): Promise<{ buffer: Buffer; tmpPath?: str
       throw new Error(`ffmpeg audio extraction failed (exit ${exitCode}): ${stderr.slice(-200)}`);
     }
 
-    let audioBuffer: Buffer;
+    let audioBuffer: Buffer<ArrayBuffer>;
     try {
       audioBuffer = Buffer.from(await Bun.file(audioPath).arrayBuffer());
     } catch (err) {
@@ -50,9 +50,9 @@ async function extractAudio(file: File): Promise<{ buffer: Buffer; tmpPath?: str
   }
 }
 
-export async function concatenateAudio(files: File[]): Promise<Buffer> {
+export async function concatenateAudio(files: File[]): Promise<Buffer<ArrayBuffer>> {
   // Extract audio from any video files first
-  const extracted: { buffer: Buffer; tmpPath?: string }[] = [];
+  const extracted: { buffer: Buffer<ArrayBuffer>; tmpPath?: string }[] = [];
   try {
     for (const f of files) {
       extracted.push(await extractAudio(f));
@@ -79,7 +79,7 @@ export async function concatenateAudio(files: File[]): Promise<Buffer> {
   try {
     for (let i = 0; i < extracted.length; i++) {
       const tmpPath = join(tmpDir, `transcriber_${Date.now()}_${i}.mp3`);
-      writeFileSync(tmpPath, extracted[i].buffer);
+      writeFileSync(tmpPath, extracted[i]!.buffer);
       tmpFiles.push(tmpPath);
     }
 

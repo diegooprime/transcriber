@@ -12,7 +12,7 @@ async function ffmpeg(...args: string[]): Promise<string> {
 }
 
 /** A mono 16-bit WAV tone, built by hand so the test needs ffmpeg as little as possible. */
-function wav(seconds: number, rate: number): Uint8Array {
+function wav(seconds: number, rate: number): Uint8Array<ArrayBuffer> {
   const n = seconds * rate;
   const view = new DataView(new ArrayBuffer(44 + n * 2));
   const ascii = (at: number, s: string) => [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
@@ -29,7 +29,8 @@ test("stitching keeps every file's audio, whatever the formats", async () => {
   try {
     const wide = new File([wav(3, 48000)], "a.wav");
     const narrow = new File([wav(2, 8000)], "c.wav");
-    await ffmpeg("-i", join(dir, await Bun.write(join(dir, "b.wav"), wav(4, 48000)).then(() => "b.wav")), "-c:a", "libopus", join(dir, "b.opus"));
+    await Bun.write(join(dir, "b.wav"), wav(4, 48000));
+    await ffmpeg("-i", join(dir, "b.wav"), "-c:a", "libopus", join(dir, "b.opus"));
     const opus = new File([await Bun.file(join(dir, "b.opus")).arrayBuffer()], "b.opus"); // WhatsApp voice notes
 
     const merged = join(dir, "merged.mp3");
