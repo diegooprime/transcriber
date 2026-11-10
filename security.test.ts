@@ -1,14 +1,6 @@
 import { test, expect } from "bun:test";
-
-// Test the escapeHtml function (extracted from app.ts for testability)
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+import { escapeHtml } from "./escape";
+import { MAX_FILES, handleTranscribe, parseSpeakers as validateSpeakers } from "./index";
 
 test("escapeHtml escapes angle brackets", () => {
   expect(escapeHtml("<script>alert(1)</script>")).toBe(
@@ -39,14 +31,6 @@ test("escapeHtml handles empty string", () => {
   expect(escapeHtml("")).toBe("");
 });
 
-// Test speakers_expected validation logic (extracted from index.ts)
-function validateSpeakers(input: string | null): number | undefined {
-  if (!input) return undefined;
-  const n = Number(input);
-  if (Number.isFinite(n) && n >= 1 && n <= 20) return n;
-  return undefined;
-}
-
 test("speakers validation accepts valid range", () => {
   expect(validateSpeakers("2")).toBe(2);
   expect(validateSpeakers("1")).toBe(1);
@@ -71,10 +55,20 @@ test("speakers validation handles null/empty", () => {
   expect(validateSpeakers("")).toBeUndefined();
 });
 
-// Test file count limit
-test("file count limit rejects more than 20 files", () => {
-  const MAX_FILES = 20;
-  expect(21 > MAX_FILES).toBe(true);
-  expect(20 > MAX_FILES).toBe(false);
-  expect(1 > MAX_FILES).toBe(false);
+// File count limit: rejected before any audio work or network call
+async function post(count: number): Promise<Response> {
+  const form = new FormData();
+  for (let i = 0; i < count; i++) form.append("audio", new File(["x"], `${i}.mp3`));
+  return handleTranscribe(new Request("http://localhost/api/transcribe", { method: "POST", body: form }));
+}
+
+test("file count limit rejects more than 20 files", async () => {
+  expect(MAX_FILES).toBe(20);
+  const res = await post(MAX_FILES + 1);
+  expect(res.status).toBe(400);
+  expect(await res.json()).toEqual({ error: "Too many files (max 20)" });
+});
+
+test("a request without files is rejected", async () => {
+  expect((await post(0)).status).toBe(400);
 });

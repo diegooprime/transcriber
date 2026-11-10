@@ -7,6 +7,15 @@ import { KEYTERM_MODELS, keyterms } from "./keyterms";
 const AAI_KEY = process.env.ASSEMBLYAI_API_KEY!;
 const PORT = Number(process.env.PORT) || 3456;
 
+export const MAX_FILES = 20;
+
+/** The speaker count AssemblyAI should expect, or undefined to let it decide. */
+export function parseSpeakers(input: string | null): number | undefined {
+  if (!input) return undefined;
+  const n = Number(input);
+  return Number.isFinite(n) && n >= 1 && n <= 20 ? n : undefined;
+}
+
 const VIDEO_EXTS = new Set(["mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "m4v", "3gp"]);
 
 function isVideoFile(name: string): boolean {
@@ -116,7 +125,7 @@ export async function concatenateAudio(files: File[]): Promise<Buffer<ArrayBuffe
   }
 }
 
-async function handleTranscribe(req: Request): Promise<Response> {
+export async function handleTranscribe(req: Request): Promise<Response> {
   const formData = await req.formData();
   const files = formData.getAll("audio") as File[];
   const language = (formData.get("language") as string) || "es";
@@ -126,8 +135,8 @@ async function handleTranscribe(req: Request): Promise<Response> {
     return Response.json({ error: "No files provided" }, { status: 400 });
   }
 
-  if (files.length > 20) {
-    return Response.json({ error: "Too many files (max 20)" }, { status: 400 });
+  if (files.length > MAX_FILES) {
+    return Response.json({ error: `Too many files (max ${MAX_FILES})` }, { status: 400 });
   }
 
   try {
@@ -159,12 +168,8 @@ async function handleTranscribe(req: Request): Promise<Response> {
     const terms = KEYTERM_MODELS.has(model) ? keyterms() : [];
     if (terms.length) transcriptBody.keyterms_prompt = terms; // his people, places and tools, spelled his way
 
-    if (speakersExpected) {
-      const n = Number(speakersExpected);
-      if (Number.isFinite(n) && n >= 1 && n <= 20) {
-        transcriptBody.speakers_expected = n;
-      }
-    }
+    const speakers = parseSpeakers(speakersExpected);
+    if (speakers !== undefined) transcriptBody.speakers_expected = speakers;
 
     const createRes = await fetch("https://api.assemblyai.com/v2/transcript", {
       method: "POST",

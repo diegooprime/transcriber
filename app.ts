@@ -1,3 +1,5 @@
+import { escapeHtml } from "./escape";
+
 const dropzone = document.getElementById("dropzone")!;
 const fileInput = document.getElementById("fileInput") as HTMLInputElement;
 const statusEl = document.getElementById("status")!;
@@ -29,15 +31,6 @@ let currentData: TranscriptData | null = null;
 let currentFilename = "";
 let speakerNames: Record<string, string> = {};
 let queuedFiles: File[] = [];
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
 
 function getDocTitle(): string {
   return docTitleInput.value.trim() || currentFilename;
